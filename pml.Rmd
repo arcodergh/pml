@@ -1,0 +1,71 @@
+---
+title: "PMLProject - Predict Class of Weight Lifting Exercise Dataset "
+author: "Alejandro Riveros Cruz"
+date: "16/06/2015"
+output: html_document
+---
+```{r echo=TRUE, warning=FALSE}
+library(caret)
+library(randomForest)
+```
+
+##Executive summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
+
+
+##Obtainig de data
+```{r cache=TRUE}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "~/pml-training.csv",method = "curl")
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "~/pml-testing.csv",method = "curl")
+training <- read.csv("~/pml-training.csv", na.strings=c("", "NA", "#DIV/0!"))
+```
+
+##Clean up the data
+A exploratory analysis shows that the data is incomplete and have many missing, NA's and other untreatable values. So, the data must be preprocessed in order to remove those variables. By the other hand there are variables which must be discarded because they are not meaningful and can introduce noise into the classifier, such variables include indices, timestamps and participant names. Finally a zero variance analysis over the train partition shows that the variable called "new_window" can be discarted.
+
+
+```{r }
+set.seed(12345)
+training <- read.csv("~/pml-training.csv", na.strings=c("", "NA", "#DIV/0!"))
+training <- training[,-c(1,2,5)]
+notNAColumns <- colSums(is.na(training)) == 0;
+training <-training[, notNAColumns]
+inTraining <-createDataPartition(training$classe, p=0.7, list=FALSE)
+training.train <- training[inTraining,]
+training.test <- training[-inTraining,]
+#remove zero variance predictors
+names(training.train[nearZeroVar(training.train)])
+training.train <- training.train[,-3]
+````
+
+##Building the prediction model
+The data was partitioned in 70% for training and 30% for test. The model was built using the caret package, the selected model was a random forest with 5 fold cross validations.
+```{r cache=TRUE}
+model<-train(classe~.,data=training.train,method="rf",
+                trControl=trainControl(method="cv",number=5),
+                prox=TRUE,allowParallel=TRUE)
+```
+
+The model shows and out of sample error estimate of  0.11% which is very low.
+```{r echo=TRUE}
+print(model$finalModel)
+```
+
+##Results 
+Using the test set to measure the model performace shows that the model performs very well obtaining an accuracy of 0.9998.
+```{r echo=TRUE}
+training.test<- training.test[,-3]
+confusionMatrix(predict(model, newdata=training.test[,-56]), training.test$classe)
+```
+
+##Predicting the results for the submission. 
+```{r}
+testing <- read.csv("~/pml-testing.csv", na.strings=c("", "NA", "#DIV/0!"))
+testing <- testing[,-c(1,2,5)]
+testing <- testing[, notNAColumns]
+testing <- testing[,-3]    	
+predict(model,newdata=testing[,-56])
+````
+
+##References
+[1] Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
